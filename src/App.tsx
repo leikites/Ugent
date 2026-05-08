@@ -1,60 +1,21 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
-import RequireAuth from '@/components/RequireAuth'
-import Login from '@/pages/Login'
-import Register from '@/pages/Register'
-import AppLayout from '@/pages/AppLayout'
-import Dashboard from '@/pages/Dashboard'
-import CommandCenter from '@/pages/CommandCenter'
-import WorkspaceList from '@/pages/WorkspaceList'
-import WorkspaceDetail from '@/pages/WorkspaceDetail'
-import AgentControlCenter from '@/pages/AgentControlCenter'
-import AgentTemplateDetail from '@/pages/AgentTemplateDetail'
-import WorkspaceAgentDetail from '@/pages/WorkspaceAgentDetail'
-import SkillLibrary from '@/pages/SkillLibrary'
-import SkillDetail from '@/pages/SkillDetail'
-import WorkflowBuilder from '@/pages/WorkflowBuilder'
-import WorkflowDetail from '@/pages/WorkflowDetail'
-import ExecutionCenter from '@/pages/ExecutionCenter'
-import WorkflowRunDetail from '@/pages/WorkflowRunDetail'
-import ReviewCenter from '@/pages/ReviewCenter'
-import ReviewDetail from '@/pages/ReviewDetail'
-import Settings from '@/pages/Settings'
-
 export default function App() {
   return (
-    <Router>
-      <Routes>
-        <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
-        <Route
-          path="/app"
-          element={
-            <RequireAuth>
-              <AppLayout />
-            </RequireAuth>
-          }
-        >
-          <Route index element={<Navigate to="dashboard" replace />} />
-          <Route path="dashboard" element={<Dashboard />} />
-          <Route path="command" element={<CommandCenter />} />
-          <Route path="workspaces" element={<WorkspaceList />} />
-          <Route path="workspaces/:workspaceId" element={<WorkspaceDetail />} />
-          <Route path="agents" element={<AgentControlCenter />} />
-          <Route path="agents/templates/:templateId" element={<AgentTemplateDetail />} />
-          <Route path="agents/instances/:agentId" element={<WorkspaceAgentDetail />} />
-          <Route path="skills" element={<SkillLibrary />} />
-          <Route path="skills/:skillId" element={<SkillDetail />} />
-          <Route path="workflows" element={<WorkflowBuilder />} />
-          <Route path="workflows/:workflowId" element={<WorkflowDetail />} />
-          <Route path="execution" element={<ExecutionCenter />} />
-          <Route path="execution/runs/:runId" element={<WorkflowRunDetail />} />
-          <Route path="reviews" element={<ReviewCenter />} />
-          <Route path="reviews/:reviewId" element={<ReviewDetail />} />
-          <Route path="settings" element={<Settings />} />
-        </Route>
-        <Route path="/" element={<Navigate to="/app/dashboard" replace />} />
-        <Route path="*" element={<Navigate to="/app/dashboard" replace />} />
-      </Routes>
-    </Router>
+    <div className="min-h-dvh bg-slate-950 text-slate-50">
+      <div className="mx-auto max-w-3xl px-6 py-16">
+        <div className="text-sm font-semibold tracking-wide text-slate-400">Ugent</div>
+        <h1 className="mt-2 text-3xl font-semibold leading-tight text-white">Ugent Web</h1>
+        <p className="mt-4 text-sm leading-6 text-slate-300">
+          Fresh start. This repository was reset from the previous UuuGent prototype.
+        </p>
+        <div className="mt-8 rounded-3xl border border-white/10 bg-white/5 p-6">
+          <div className="text-sm font-semibold text-white">Quick sanity</div>
+          <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-slate-300">
+            <li>Run dev server: <code className="rounded bg-black/30 px-1.5 py-0.5">npm run dev</code></li>
+            <li>Build: <code className="rounded bg-black/30 px-1.5 py-0.5">npm run build</code></li>
+          </ul>
+        </div>
+      </div>
+    </div>
   )
 }
+
