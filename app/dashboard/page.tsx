@@ -1,11 +1,19 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
-import { counts, loadReviewState, projectDefaults, saveReviewState, workerRuns } from '../amigoMock'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { counts, loadReviewState, projectDefaults, saveReviewState, seedReviewState, workerRuns } from '../amigoMock'
 
 export default function DashboardPage() {
-  const [state] = useState(() => loadReviewState())
+  const didHydrate = useRef(false)
+  const [state, setState] = useState(() => seedReviewState())
+
   useEffect(() => {
+    setState(loadReviewState())
+    didHydrate.current = true
+  }, [])
+
+  useEffect(() => {
+    if (!didHydrate.current) return
     saveReviewState(state)
   }, [state])
 
@@ -70,7 +78,7 @@ export default function DashboardPage() {
               <a
                 key={it.id}
                 className="block u-well no-underline"
-                href={`/review-queue?selected=${encodeURIComponent(it.id)}`}
+                href={`/review-queue/${encodeURIComponent(it.id)}`}
               >
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div className="min-w-0">

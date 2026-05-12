@@ -1,5 +1,5 @@
-import { redirect } from 'next/navigation'
+import DetailClient from '../DetailClient'
 
 export default function ReviewDetailPage({ params }: { params: { id: string } }) {
-  redirect(`/review-queue?selected=${encodeURIComponent(params.id)}`)
+  return <DetailClient itemId={params.id} />
 }

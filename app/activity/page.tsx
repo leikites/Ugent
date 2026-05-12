@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { loadReviewState, saveReviewState, workerRuns } from '../amigoMock'
+import { useEffect, useRef, useState } from 'react'
+import { loadReviewState, saveReviewState, seedReviewState, workerRuns } from '../amigoMock'
 
 function statusDot(status: 'ok' | 'warn' | 'error') {
   if (status === 'ok') return 'rgb(var(--positive) / 1)'
@@ -17,8 +17,16 @@ function workerLabel(worker: (typeof workerRuns)[number]['worker']) {
 }
 
 export default function ActivityPage() {
-  const [state] = useState(() => loadReviewState())
+  const didHydrate = useRef(false)
+  const [state, setState] = useState(() => seedReviewState())
+
   useEffect(() => {
+    setState(loadReviewState())
+    didHydrate.current = true
+  }, [])
+
+  useEffect(() => {
+    if (!didHydrate.current) return
     saveReviewState(state)
   }, [state])
 
@@ -27,7 +35,8 @@ export default function ActivityPage() {
     user_feedback: 'user_feedback',
     draft_revision: 'draft_revision',
     user_decision: 'user_decision',
-    approval: 'approval'
+    approval: 'approval',
+    user_request: 'user_request'
   }
 
   return (

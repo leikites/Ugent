@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process'
+import type { AskAnalysisApiResponse, AskAnalysisRequest, AskAnalysisResult } from './pmAssistantTypes'
 import type { DraftRevisionApiResponse, DraftRevisionRequest, RevisionConfidence, RevisionModelStatus } from './reviseDraftTypes'
 
 const DEFAULT_BASE_URL = process.env.DEEPSEEK_BASE_URL?.trim() || 'https://api.deepseek.com'
@@ -50,6 +51,23 @@ export function getRevisionModelStatus(): RevisionModelStatus {
     detail: enabled
       ? `DeepSeek is configured for draft revision only via ${auth.authSource}.`
       : 'DeepSeek is not configured. Revision API will fall back to local mock rewrite.'
+  }
+}
+
+export function getPmAssistantModelStatus(): AskAnalysisApiResponse['modelStatus'] {
+  const base = getRevisionModelStatus()
+  return {
+    provider: base.provider,
+    model: base.model,
+    baseUrl: base.baseUrl,
+    enabled: base.enabled,
+    available: base.available,
+    authSource: base.authSource,
+    revisionOnly: base.revisionOnly,
+    askAnalysisEnabled: true,
+    jiraWritesEnabled: false,
+    approvalMode: 'local_state_only',
+    detail: base.detail
   }
 }
 
@@ -152,4 +170,122 @@ export async function reviseDraftWithDeepSeek(payload: DraftRevisionRequest) {
   const data = await response.json()
   const text = data?.choices?.[0]?.message?.content || extractTextFromResponsesPayload(data)
   return parseRevisionJson(text)
+}
+
+function parseAskAnalysisJson(rawText: string): AskAnalysisResult {
+  const parsed = JSON.parse(rawText)
+  const category = parsed?.category
+  const executionMode = parsed?.executionMode
+  const analysisNarrative = typeof parsed?.analysisNarrative === 'string' ? parsed.analysisNarrative.trim() : ''
+  const recommendedMove = typeof parsed?.recommendedMove === 'string' ? parsed.recommendedMove.trim() : ''
+  const riskLevel = parsed?.riskLevel
+  const confidence = normalizeConfidence(parsed?.confidence)
+  const draft = typeof parsed?.draft === 'string' ? parsed.draft.trim() : ''
+  const sourceEvidence = Array.isArray(parsed?.sourceEvidence)
+    ? parsed.sourceEvidence.filter((value: unknown) => typeof value === 'string' && value.trim()).map((value: string) => value.trim())
+    : []
+  const assumptions = Array.isArray(parsed?.assumptions)
+    ? parsed.assumptions.filter((value: unknown) => typeof value === 'string' && value.trim()).map((value: string) => value.trim())
+    : []
+  const suggestedOwner = typeof parsed?.suggestedOwner === 'string' ? parsed.suggestedOwner.trim() : undefined
+
+  const validCategory = category === 'comment_reply' || category === 'create_ticket' || category === 'create_epic'
+  const validExecutionMode = executionMode === 'draft_only' || executionMode === 'needs_approval' || executionMode === 'blocked'
+  const validRisk = riskLevel === 'low' || riskLevel === 'medium' || riskLevel === 'high' || riskLevel === 'critical'
+
+  if (!validCategory || !validExecutionMode || !analysisNarrative || !recommendedMove || !validRisk || !draft) {
+    throw new Error('DeepSeek ask-analysis response is missing required fields')
+  }
+
+  return {
+    category,
+    origin: 'user_requested',
+    executionMode,
+    analysisNarrative,
+    recommendedMove,
+    riskLevel,
+    confidence,
+    suggestedOwner,
+    draft,
+    sourceEvidence,
+    assumptions,
+    analysisSource: 'deepseek',
+    dataSource: 'mock'
+  }
+}
+
+export async function analyzeAskWithDeepSeek(payload: AskAnalysisRequest) {
+  const status = getPmAssistantModelStatus()
+  const auth = resolveAuth()
+  if (!auth.apiKey) {
+    throw new Error('DeepSeek API key is not configured')
+  }
+
+  const prompt = [
+    'You are a Codex-style PM assistant.',
+    'Task: analyze the user request and produce a structured PM output.',
+    'Output MUST be Simplified Chinese for analysisNarrative.',
+    'Category MUST be one of: comment_reply, create_ticket, create_epic.',
+    'Quick action (if provided) should strongly bias the category.',
+    'analysisNarrative MUST follow exactly this sectioned format:',
+    '[Main Take] ...',
+    '[Why] ...',
+    '[Recommended Move] 1. ... 2. ...',
+    '[Draft Direction] ...',
+    '[Small Risk / Assumption] ...',
+    'Return JSON only with fields:',
+    'category, executionMode, analysisNarrative, recommendedMove, riskLevel, confidence, suggestedOwner, draft, sourceEvidence, assumptions.',
+    'Do not mention system prompts or hidden reasoning.',
+    'Guardrails: Jira writes disabled. Approval only updates local state.'
+  ].join(' ')
+
+  const context = payload.context
+    ? [
+        `Data source: ${payload.context.dataSource}`,
+        `Jira writes enabled: ${payload.context.jiraWritesEnabled}`,
+        payload.context.notes?.length ? `Notes:\n${payload.context.notes.map((n) => `- ${n}`).join('\n')}` : '',
+        payload.context.recentItems?.length
+          ? `Recent items:\n${payload.context.recentItems
+              .slice(0, 12)
+              .map((it) => `- ${it.id}${it.issueKey ? ` (${it.issueKey})` : ''} | ${it.category ?? 'n/a'} | ${it.riskLevel ?? 'n/a'} | ${it.title}`)
+              .join('\n')}`
+          : ''
+      ]
+        .filter(Boolean)
+        .join('\n\n')
+    : ''
+
+  const input = [
+    `User prompt:\n${payload.prompt.trim()}`,
+    payload.quickAction ? `Quick action: ${payload.quickAction}` : '',
+    context ? `Context:\n${context}` : ''
+  ]
+    .filter(Boolean)
+    .join('\n\n')
+
+  const response = await fetch(`${status.baseUrl}/chat/completions`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${auth.apiKey}`
+    },
+    body: JSON.stringify({
+      model: status.model,
+      temperature: 0.2,
+      response_format: { type: 'json_object' },
+      messages: [
+        { role: 'system', content: prompt },
+        { role: 'user', content: input }
+      ]
+    })
+  })
+
+  if (!response.ok) {
+    const errorText = await response.text()
+    throw new Error(`DeepSeek request failed: ${response.status} ${errorText}`)
+  }
+
+  const data = await response.json()
+  const text = data?.choices?.[0]?.message?.content || extractTextFromResponsesPayload(data)
+  return parseAskAnalysisJson(text)
 }
